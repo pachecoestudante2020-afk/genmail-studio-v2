@@ -40,7 +40,9 @@ public sealed class DefaultNameNormalizer : INameNormalizer
         string last = tokens.Length > 1 ? tokens[^1] : first;
         string middle = tokens.Length > 2 ? string.Join(string.Empty, tokens.Skip(1).Take(tokens.Length - 2)) : string.Empty;
         string all = string.Join(string.Empty, tokens);
-        string reverseAll = string.Join(string.Empty, tokens.Reverse());
+        string[] reversedTokens = tokens.ToArray();
+        Array.Reverse(reversedTokens);
+        string reverseAll = string.Join(string.Empty, reversedTokens);
         return new NormalizedName(input, lowered, first, middle, last, all, reverseAll);
     }
 
