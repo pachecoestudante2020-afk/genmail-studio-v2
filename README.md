@@ -146,3 +146,8 @@ Generation creates an output folder named with timestamp (`yyyyMMdd_HHmmss`) con
 - Output files are written with buffered writers.
 - Large rule/range combinations can multiply output quickly; use Estimate + Safety settings before Start.
 - Persistent dedupe (SQLite) trades some speed for cross-run duplicate prevention.
+
+- For small files: keep default rules and use in-memory dedupe for best speed.
+- For large files: reduce rule count/number ranges and use SQLite dedupe for cross-run protection.
+- Many rules multiplied by wide number ranges can expand output dramatically.
+- Use Estimate before Start to avoid unexpectedly large output volume.

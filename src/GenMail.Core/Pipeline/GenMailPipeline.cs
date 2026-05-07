@@ -42,8 +42,8 @@ public sealed class GenMailPipeline
         string CurrentEmailsPath() => options.SplitOutputFiles ? Path.Combine(outputDir, $"emails_{fileIndex:000}.txt") : emailsPath;
         void OpenWriters()
         {
-            usernamesWriter = new StreamWriter(new FileStream(CurrentUsernamesPath(), FileMode.Create, FileAccess.Write, FileShare.None, 65536, true), new UTF8Encoding(false));
-            emailsWriter = new StreamWriter(new FileStream(CurrentEmailsPath(), FileMode.Create, FileAccess.Write, FileShare.None, 65536, true), new UTF8Encoding(false));
+            usernamesWriter = new StreamWriter(new FileStream(CurrentUsernamesPath(), FileMode.Create, FileAccess.Write, FileShare.None, 4 * 1024 * 1024, true), new UTF8Encoding(false), 4 * 1024 * 1024);
+            emailsWriter = new StreamWriter(new FileStream(CurrentEmailsPath(), FileMode.Create, FileAccess.Write, FileShare.None, 4 * 1024 * 1024, true), new UTF8Encoding(false), 4 * 1024 * 1024);
             outputFilesCreated++;
             rowsInCurrentFile = 0;
         }
@@ -63,8 +63,10 @@ public sealed class GenMailPipeline
         RuleCatalog catalog = new RuleCatalog(BuiltInUsernameRules.CreateDefault());
         IReadOnlyList<IUsernameRule> rules = options.SelectedRuleIds is { Count: > 0 } ? options.SelectedRuleIds.Select(catalog.GetById).ToList() : catalog.All.ToList();
 
-        IReadOnlyList<string> numbers = new NumberRangeParser().Parse(options.NumberPattern, options.MaxNumbersPerBase);
-        SafetyEstimate estimate = new OutputEstimator().Estimate(1, rules.Count, Math.Max(1, numbers.Count));
+        IReadOnlyList<string> numbers = options.NumberMode == NumberMode.BaseOnly
+            ? Array.Empty<string>()
+            : new NumberRangeParser().Parse(options.NumberPattern, options.MaxNumbersPerBase);
+        SafetyEstimate estimate = new OutputEstimator().Estimate(1, rules.Count, options.NumberMode == NumberMode.BaseOnly ? 1 : Math.Max(1, numbers.Count));
         new SafetyGuard().EnsureWithinLimits(estimate, options);
 
         await using IDedupeStore dedupeStore = options.DedupeMode == DedupeMode.Persistent ? new SqliteDedupeStore(options.DedupeDbPath ?? Path.Combine(outputDir, "dedupe.db")) : options.DedupeMode == DedupeMode.PerRun ? new InMemoryDedupeStore() : new NoopDedupeStore();
@@ -75,6 +77,7 @@ public sealed class GenMailPipeline
         List<string> warnings = new List<string>();
 
         long inputLines = 0; long validInputs = 0; long usernamesGenerated = 0; long emailsWritten = 0; long duplicates = 0; long qualityRejected = 0; long rejectedInputs = 0;
+        DateTimeOffset lastProgressAt = DateTimeOffset.UtcNow;
         UsernameGenerator generator = new UsernameGenerator();
         NumberExpansionService expander = new NumberExpansionService();
         UsernameQualityPolicy quality = new UsernameQualityPolicy();
@@ -133,9 +136,10 @@ public sealed class GenMailPipeline
                 }
             }
 
-            if (inputLines % options.ProgressReportInterval == 0)
+            if (inputLines % 5000 == 0 || (DateTimeOffset.UtcNow - lastProgressAt).TotalMilliseconds >= 250)
             {
                 progress?.Report(new ProgressSnapshot(inputLines, usernamesGenerated, emailsWritten, duplicates, qualityRejected, "running"));
+                lastProgressAt = DateTimeOffset.UtcNow;
             }
         }
 

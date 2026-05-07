@@ -37,6 +37,9 @@ public sealed class SqliteDedupeStore : IDedupeStore
 {
     private readonly SqliteConnection _connection;
     private readonly SqliteCommand _insertCommand;
+    private SqliteTransaction _activeTransaction;
+    private int _batchCount;
+    private const int BatchSize = 1000;
 
     public SqliteDedupeStore(string path)
     {
@@ -64,7 +67,9 @@ PRIMARY KEY(scope, key_mode, dedupe_key)
             create.ExecuteNonQuery();
         }
 
+        _activeTransaction = _connection.BeginTransaction();
         _insertCommand = _connection.CreateCommand();
+        _insertCommand.Transaction = _activeTransaction;
         _insertCommand.CommandText = @"INSERT OR IGNORE INTO generated_keys(scope,key_mode,dedupe_key,username,email,source_input,created_at_utc)
 VALUES($scope,$key_mode,$dedupe_key,$username,$email,$source_input,$created_at_utc);";
         _insertCommand.Parameters.Add("$scope", SqliteType.Text);
@@ -88,11 +93,22 @@ VALUES($scope,$key_mode,$dedupe_key,$username,$email,$source_input,$created_at_u
         _insertCommand.Parameters["$created_at_utc"].Value = entry.CreatedAtUtc.UtcDateTime.ToString("O");
 
         int changed = _insertCommand.ExecuteNonQuery();
+        _batchCount++;
+        if (_batchCount >= BatchSize)
+        {
+            _activeTransaction.Commit();
+            _activeTransaction.Dispose();
+            _activeTransaction = _connection.BeginTransaction();
+            _insertCommand.Transaction = _activeTransaction;
+            _batchCount = 0;
+        }
         return ValueTask.FromResult(changed > 0);
     }
 
     public ValueTask DisposeAsync()
     {
+        _activeTransaction.Commit();
+        _activeTransaction.Dispose();
         _insertCommand.Dispose();
         _connection.Dispose();
         return ValueTask.CompletedTask;
