@@ -1,3 +1,4 @@
+using Xunit;
 using GenMail.Core;
 
 namespace GenMail.Core.Tests;
