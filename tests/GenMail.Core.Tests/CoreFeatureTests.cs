@@ -118,4 +118,76 @@ public class CoreFeatureTests
         ProcessingResult r = await p.RunAsync(input, o, null, CancellationToken.None);
         Assert.True(r.Counters.EmailsGenerated >= 2);
     }
+
+
+    [Fact]
+    public void NumberRangeParser_Padded00_02()
+    {
+        IReadOnlyList<string> vals = new NumberRangeParser().Parse("00-02");
+        Assert.Equal(new[] { "00", "01", "02" }, vals);
+    }
+
+    [Fact]
+    public void NumberRangeParser_CustomPadded001_003()
+    {
+        IReadOnlyList<string> vals = new NumberRangeParser().Parse("001-003");
+        Assert.Equal(new[] { "001", "002", "003" }, vals);
+    }
+
+    [Fact]
+    public void NumberRangeParser_CommaList()
+    {
+        IReadOnlyList<string> vals = new NumberRangeParser().Parse("1,2,3,10");
+        Assert.Equal(new[] { "1", "2", "3", "10" }, vals);
+    }
+
+    [Fact]
+    public void NumberRangeParser_Mixed()
+    {
+        IReadOnlyList<string> vals = new NumberRangeParser().Parse("01-03,99");
+        Assert.Equal(new[] { "01", "02", "03", "99" }, vals);
+    }
+
+    [Fact]
+    public void NumberRangeParser_InvalidDescendingRange_Rejects()
+    {
+        Assert.Throws<ArgumentException>(() => new NumberRangeParser().Parse("10-01"));
+    }
+
+    [Fact]
+    public void NumberExpansion_Suffix()
+    {
+        IReadOnlyList<string> vals = new NumberExpansionService().Expand("john", new[] { "00", "01" }, NumberMode.NumberedOnly, NumberPlacementMode.SuffixOnly);
+        Assert.Equal(new[] { "john00", "john01" }, vals);
+    }
+
+    [Fact]
+    public void NumberExpansion_Prefix()
+    {
+        IReadOnlyList<string> vals = new NumberExpansionService().Expand("john", new[] { "1" }, NumberMode.NumberedOnly, NumberPlacementMode.PrefixOnly);
+        Assert.Contains("1john", vals);
+    }
+
+    [Fact]
+    public void NumberExpansion_Infix()
+    {
+        IReadOnlyList<string> vals = new NumberExpansionService().Expand("john.smith", new[] { "99" }, NumberMode.NumberedOnly, NumberPlacementMode.InfixBeforeLastToken);
+        Assert.Contains("john99.smith", vals);
+    }
+
+    [Fact]
+    public void NumberExpansion_BaseOnly()
+    {
+        IReadOnlyList<string> vals = new NumberExpansionService().Expand("john", new[] { "01" }, NumberMode.BaseOnly, NumberPlacementMode.SuffixOnly);
+        Assert.Equal(new[] { "john" }, vals);
+    }
+
+    [Fact]
+    public void NumberExpansion_BaseAndNumbered()
+    {
+        IReadOnlyList<string> vals = new NumberExpansionService().Expand("john", new[] { "01" }, NumberMode.BaseAndNumbered, NumberPlacementMode.SuffixOnly);
+        Assert.Contains("john", vals);
+        Assert.Contains("john01", vals);
+    }
+
 }
