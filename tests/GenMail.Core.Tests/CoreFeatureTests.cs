@@ -278,3 +278,22 @@ public class CoreFeatureTests
     }
 
 }
+
+public class PipelineIntegrationTests
+{
+    [Fact]
+    public async Task Pipeline_RejectsMissingInput()
+    {
+        GenMailPipeline p = new GenMailPipeline();
+        await Assert.ThrowsAsync<FileNotFoundException>(() => p.RunAsync("/tmp/not-exists.txt", new GenerationOptions("example.com", Path.GetTempPath()), null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Pipeline_RejectsNonTxtInput()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"gm_{Guid.NewGuid():N}.csv");
+        await File.WriteAllTextAsync(path, "x");
+        GenMailPipeline p = new GenMailPipeline();
+        await Assert.ThrowsAsync<ArgumentException>(() => p.RunAsync(path, new GenerationOptions("example.com", Path.GetTempPath()), null, CancellationToken.None));
+    }
+}

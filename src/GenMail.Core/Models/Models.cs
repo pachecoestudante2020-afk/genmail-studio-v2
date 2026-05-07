@@ -23,25 +23,11 @@ public sealed record InputRecord(long LineNumber, string OriginalInput, string T
 public sealed record NormalizedName(string OriginalInput, string Lowered, string First, string Middle, string Last, string All, string ReverseAll);
 public sealed record UsernameCandidate(string RuleId, string Username);
 public sealed record EmailCandidate(string Username, string Email);
+public sealed record ProcessingCounters(long InputLines, long ValidInputs, long UsernamesGenerated, long EmailsGenerated, long DuplicateSkipped, long QualityRejected, long RejectedInputs);
 
-public sealed record ProcessingCounters(
-    long InputLines,
-    long ValidInputs,
-    long UsernamesGenerated,
-    long EmailsGenerated,
-    long DuplicateSkipped,
-    long QualityRejected,
-    long RejectedInputs
-);
-
-public sealed record ProgressSnapshot(long InputLinesProcessed, long EmailsGenerated, string CurrentInput);
+public sealed record ProgressSnapshot(long InputLinesRead, long UsernamesGenerated, long EmailsWritten, long DuplicatesSkipped, long QualityRejected, string Status);
 public sealed record SafetyEstimate(long InputLines, int RulesPerInput, int NumbersPerBase, long EstimatedOutput);
 public sealed record UsernameRuleDefinition(string Id, string Template);
 public sealed record DedupeEntry(string Scope, string KeyMode, string Key, string Username, string Email, string SourceInput, DateTimeOffset CreatedAtUtc);
 
-public sealed record ProcessingResult(
-    string OutputDirectory,
-    ProcessingCounters Counters,
-    IReadOnlyList<string> WarningMessages,
-    bool Cancelled
-);
+public sealed record ProcessingResult(string OutputDirectory, ProcessingCounters Counters, SafetyEstimate SafetyEstimate, IReadOnlyList<string> GeneratedFiles, IReadOnlyList<string> Warnings);

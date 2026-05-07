@@ -1,3 +1,4 @@
+using System.Text;
 using GenMail.Core.Dedupe;
 using GenMail.Core.Emailing;
 using GenMail.Core.Generation;
@@ -15,6 +16,7 @@ public sealed class GenMailPipeline
 {
     public async Task<ProcessingResult> RunAsync(string inputPath, GenerationOptions options, IProgress<ProgressSnapshot>? progress, CancellationToken cancellationToken)
     {
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         if (!File.Exists(inputPath)) throw new FileNotFoundException(inputPath);
         if (!Path.GetExtension(inputPath).Equals(".txt", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Input must be .txt");
 
@@ -23,100 +25,102 @@ public sealed class GenMailPipeline
 
         string outputDir = Path.Combine(options.OutputRoot, DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"));
         Directory.CreateDirectory(outputDir);
-
         string usernamesPath = Path.Combine(outputDir, "usernames.txt");
         string emailsPath = Path.Combine(outputDir, "emails.txt");
 
         FastLineReader reader = new FastLineReader();
         INameNormalizer normalizer = new DefaultNameNormalizer();
         IDirectUsernameDetector detector = new DefaultDirectUsernameDetector();
-        RuleCatalog ruleCatalog = new RuleCatalog(BuiltInUsernameRules.CreateDefault());
-        IReadOnlyList<IUsernameRule> rules = options.SelectedRuleIds is { Count: > 0 }
-            ? options.SelectedRuleIds.Select(ruleCatalog.GetById).ToList()
-            : ruleCatalog.All.ToList();
+        RuleCatalog catalog = new RuleCatalog(BuiltInUsernameRules.CreateDefault());
+        IReadOnlyList<IUsernameRule> rules = options.SelectedRuleIds is { Count: > 0 } ? options.SelectedRuleIds.Select(catalog.GetById).ToList() : catalog.All.ToList();
 
-        NumberRangeParser parser = new NumberRangeParser();
-        IReadOnlyList<string> numbers = parser.Parse(options.NumberPattern);
-        new SafetyGuard().EnsureWithinLimits(new OutputEstimator().Estimate(1000, rules.Count, Math.Max(1, numbers.Count)), options);
+        IReadOnlyList<string> numbers = new NumberRangeParser().Parse(options.NumberPattern, options.MaxNumbersPerBase);
+        SafetyEstimate estimate = new OutputEstimator().Estimate(1, rules.Count, Math.Max(1, numbers.Count));
+        new SafetyGuard().EnsureWithinLimits(estimate, options);
 
+        await using IDedupeStore dedupeStore = options.DedupeMode == DedupeMode.Persistent ? new SqliteDedupeStore(options.DedupeDbPath ?? Path.Combine(outputDir, "dedupe.db")) : options.DedupeMode == DedupeMode.PerRun ? new InMemoryDedupeStore() : new NoopDedupeStore();
+
+        List<DuplicateSkippedRow> duplicateRows = new List<DuplicateSkippedRow>();
+        List<QualityRejectedRow> qualityRows = new List<QualityRejectedRow>();
+        List<RejectedInputRow> rejectedRows = new List<RejectedInputRow>();
+        List<string> warnings = new List<string>();
+
+        long inputLines = 0; long validInputs = 0; long usernamesGenerated = 0; long emailsWritten = 0; long duplicates = 0; long qualityRejected = 0; long rejectedInputs = 0;
         UsernameGenerator generator = new UsernameGenerator();
-        NumberExpansionService expansion = new NumberExpansionService();
+        NumberExpansionService expander = new NumberExpansionService();
         UsernameQualityPolicy quality = new UsernameQualityPolicy();
-        CsvReportWriter reportWriter = new CsvReportWriter();
-        List<string> duplicateSkipped = new List<string>();
-        List<string> qualityRejected = new List<string>();
-        List<string> rejectedInputs = new List<string>();
 
-        await using IDedupeStore dedupeStore = options.DedupeMode switch
-        {
-            DedupeMode.Persistent => new SqliteDedupeStore(options.DedupeDbPath ?? Path.Combine(outputDir, "dedupe.db")),
-            DedupeMode.PerRun => new InMemoryDedupeStore(),
-            _ => new NoopDedupeStore(),
-        };
-
-        long inputLines = 0; long validInputs = 0; long usernamesGenerated = 0; long emailsGenerated = 0; long duplicates = 0; long qualityRejects = 0; long rejected = 0;
-        await using StreamWriter usernamesWriter = new StreamWriter(usernamesPath);
-        await using StreamWriter emailsWriter = new StreamWriter(emailsPath);
+        await using StreamWriter usernamesWriter = new StreamWriter(new FileStream(usernamesPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true), new UTF8Encoding(false));
+        await using StreamWriter emailsWriter = new StreamWriter(new FileStream(emailsPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true), new UTF8Encoding(false));
 
         await foreach (InputRecord record in reader.ReadAsync(inputPath, options.SkipEmptyLines, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             inputLines++;
-            string seed;
+            IEnumerable<string> baseCandidates;
             if (detector.IsDirectUsername(record.TrimmedInput))
             {
-                seed = record.TrimmedInput.ToLowerInvariant();
+                validInputs++;
+                baseCandidates = new[] { record.TrimmedInput.ToLowerInvariant() };
             }
             else
             {
-                NormalizedName name = normalizer.Normalize(record.TrimmedInput);
-                if (string.IsNullOrWhiteSpace(name.All)) { rejected++; rejectedInputs.Add(record.OriginalInput); continue; }
-                validInputs++;
-                foreach (UsernameCandidate candidate in generator.Generate(name, rules))
+                NormalizedName normalized = normalizer.Normalize(record.TrimmedInput);
+                if (string.IsNullOrWhiteSpace(normalized.All))
                 {
-                    IReadOnlyList<string> expanded = expansion.Expand(candidate.Username, numbers, options.NumberMode, options.NumberPlacementMode);
-                    foreach (string user in expanded)
-                    {
-                        RejectionReason? reason = quality.Validate(user, options);
-                        if (reason.HasValue) { qualityRejects++; qualityRejected.Add($"{record.LineNumber},{user},{reason.Value}"); continue; }
-                        bool added = await dedupeStore.TryAddAsync(new DedupeEntry("global", "username", user, user, string.Empty, record.OriginalInput, DateTimeOffset.UtcNow), cancellationToken).ConfigureAwait(false);
-                        if (!added) { duplicates++; duplicateSkipped.Add($"{record.LineNumber},{user}"); continue; }
-                        usernamesGenerated++;
-                        await usernamesWriter.WriteLineAsync(user).ConfigureAwait(false);
-                        string email = emailBuilder.Build(user, options.Domain);
-                        await emailsWriter.WriteLineAsync(email).ConfigureAwait(false);
-                        emailsGenerated++;
-                    }
+                    rejectedInputs++;
+                    rejectedRows.Add(new RejectedInputRow(record.OriginalInput, RejectionReason.Empty.ToString(), DateTimeOffset.UtcNow));
+                    continue;
                 }
-                continue;
+                validInputs++;
+                baseCandidates = generator.Generate(normalized, rules).Select(c => c.Username);
             }
 
-            validInputs++;
-            IReadOnlyList<string> expandedDirect = expansion.Expand(seed, numbers, options.NumberMode, options.NumberPlacementMode);
-            foreach (string user in expandedDirect)
+            foreach (string baseCandidate in baseCandidates)
             {
-                RejectionReason? reason = quality.Validate(user, options);
-                if (reason.HasValue) { qualityRejects++; qualityRejected.Add($"{record.LineNumber},{user},{reason.Value}"); continue; }
-                bool added = await dedupeStore.TryAddAsync(new DedupeEntry("global", "username", user, user, string.Empty, record.OriginalInput, DateTimeOffset.UtcNow), cancellationToken).ConfigureAwait(false);
-                if (!added) { duplicates++; duplicateSkipped.Add($"{record.LineNumber},{user}"); continue; }
-                usernamesGenerated++;
-                await usernamesWriter.WriteLineAsync(user).ConfigureAwait(false);
-                string email = emailBuilder.Build(user, options.Domain);
-                await emailsWriter.WriteLineAsync(email).ConfigureAwait(false);
-                emailsGenerated++;
+                foreach (string username in expander.Expand(baseCandidate, numbers, options.NumberMode, options.NumberPlacementMode))
+                {
+                    RejectionReason? rejection = quality.Validate(username, options);
+                    if (rejection.HasValue)
+                    {
+                        qualityRejected++;
+                        qualityRows.Add(new QualityRejectedRow(username, string.Empty, record.OriginalInput, rejection.Value.ToString(), DateTimeOffset.UtcNow));
+                        continue;
+                    }
+                    string email = emailBuilder.Build(username, options.Domain);
+                    DedupeEntry entry = new DedupeEntry("global", "username", username, username, email, record.OriginalInput, DateTimeOffset.UtcNow);
+                    bool added = await dedupeStore.TryAddAsync(entry, cancellationToken).ConfigureAwait(false);
+                    if (!added)
+                    {
+                        duplicates++;
+                        duplicateRows.Add(new DuplicateSkippedRow(entry.Key, entry.KeyMode, entry.Username, entry.Email, entry.SourceInput, "duplicate", entry.CreatedAtUtc));
+                        continue;
+                    }
+
+                    usernamesGenerated++;
+                    emailsWritten++;
+                    await usernamesWriter.WriteLineAsync(username).ConfigureAwait(false);
+                    await emailsWriter.WriteLineAsync(email).ConfigureAwait(false);
+                }
             }
 
             if (inputLines % options.ProgressReportInterval == 0)
             {
-                progress?.Report(new ProgressSnapshot(inputLines, emailsGenerated, record.OriginalInput));
+                progress?.Report(new ProgressSnapshot(inputLines, usernamesGenerated, emailsWritten, duplicates, qualityRejected, "running"));
             }
         }
 
-        ProcessingResult result = new ProcessingResult(outputDir, new ProcessingCounters(inputLines, validInputs, usernamesGenerated, emailsGenerated, duplicates, qualityRejects, rejected), new List<string>(), false);
-        await reportWriter.WriteRowsAsync(Path.Combine(outputDir, "duplicate_skipped.csv"), duplicateSkipped, cancellationToken).ConfigureAwait(false);
-        await reportWriter.WriteRowsAsync(Path.Combine(outputDir, "quality_rejected.csv"), qualityRejected, cancellationToken).ConfigureAwait(false);
-        await reportWriter.WriteRowsAsync(Path.Combine(outputDir, "rejected_inputs.csv"), rejectedInputs, cancellationToken).ConfigureAwait(false);
-        await new SummaryWriter().WriteAsync(Path.Combine(outputDir, "summary.txt"), result, cancellationToken).ConfigureAwait(false);
+        ProcessingCounters counters = new ProcessingCounters(inputLines, validInputs, usernamesGenerated, emailsWritten, duplicates, qualityRejected, rejectedInputs);
+        List<string> generatedFiles = new List<string> { "usernames.txt", "emails.txt", "duplicate_skipped.csv", "quality_rejected.csv", "rejected_inputs.csv", "summary.txt" };
+        ProcessingResult result = new ProcessingResult(outputDir, counters, estimate, generatedFiles, warnings);
+
+        CsvReportWriter reportWriter = new CsvReportWriter();
+        await reportWriter.WriteDuplicateSkippedAsync(Path.Combine(outputDir, "duplicate_skipped.csv"), duplicateRows, cancellationToken).ConfigureAwait(false);
+        await reportWriter.WriteQualityRejectedAsync(Path.Combine(outputDir, "quality_rejected.csv"), qualityRows, cancellationToken).ConfigureAwait(false);
+        await reportWriter.WriteRejectedInputsAsync(Path.Combine(outputDir, "rejected_inputs.csv"), rejectedRows, cancellationToken).ConfigureAwait(false);
+
+        await new SummaryWriter().WriteAsync(Path.Combine(outputDir, "summary.txt"), startedAt, DateTimeOffset.UtcNow, inputPath, options, result, generatedFiles, warnings, cancellationToken).ConfigureAwait(false);
+        progress?.Report(new ProgressSnapshot(inputLines, usernamesGenerated, emailsWritten, duplicates, qualityRejected, "completed"));
         return result;
     }
 }
