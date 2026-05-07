@@ -39,6 +39,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public AliasFilterMode AliasFilterMode { get; set; } = AliasFilterMode.None;
     public int MaxOutputEmails { get; set; } = 1_000_000;
     public int MaxNumbersPerBase { get; set; } = 1_000;
+    public bool SplitOutputFiles { get; set; }
+    public int? RowsPerOutputFile { get; set; } = 50000;
     public string StatusText { get; set; } = "Ready.";
     public string OutputFolder { get; set; } = string.Empty;
     public long InputLinesRead { get; set; }
@@ -95,7 +97,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _cts = new CancellationTokenSource();
         try
         {
-            GenerationOptions options = new GenerationOptions(Domain, Path.Combine(Environment.CurrentDirectory, "output"), NumberMode: NumberMode, NumberPlacementMode: NumberPlacementMode, NumberPattern: NumberRangeText, SelectedRuleIds: RuleItems.Where(r => r.IsSelected).Select(r => r.Id).ToList(), DedupeMode: DedupeMode, MaxOutputEmails: MaxOutputEmails, MaxNumbersPerBase: MaxNumbersPerBase);
+            GenerationOptions options = new GenerationOptions(Domain, Path.Combine(Environment.CurrentDirectory, "output"), NumberMode: NumberMode, NumberPlacementMode: NumberPlacementMode, NumberPattern: NumberRangeText, SelectedRuleIds: RuleItems.Where(r => r.IsSelected).Select(r => r.Id).ToList(), DedupeMode: DedupeMode, MaxOutputEmails: MaxOutputEmails, MaxNumbersPerBase: MaxNumbersPerBase, SplitOutputFiles: SplitOutputFiles, RowsPerOutputFile: RowsPerOutputFile);
             Progress<ProgressSnapshot> progress = new Progress<ProgressSnapshot>(p =>
             {
                 InputLinesRead = p.InputLinesRead; UsernamesGenerated = p.UsernamesGenerated; EmailsWritten = p.EmailsWritten; DuplicatesSkipped = p.DuplicatesSkipped; QualityRejected = p.QualityRejected; StatusText = p.Status;

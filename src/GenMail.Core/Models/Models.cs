@@ -16,14 +16,16 @@ public sealed record GenerationOptions(
     int ProgressReportInterval = 1000,
     int MaxOutputEmails = 1_000_000,
     int MaxNumbersPerBase = 1_000,
-    int MaxInputLinesBeforeWarning = 500_000
+    int MaxInputLinesBeforeWarning = 500_000,
+    bool SplitOutputFiles = false,
+    int? RowsPerOutputFile = null
 );
 
 public sealed record InputRecord(long LineNumber, string OriginalInput, string TrimmedInput);
 public sealed record NormalizedName(string OriginalInput, string Lowered, string First, string Middle, string Last, string All, string ReverseAll);
 public sealed record UsernameCandidate(string RuleId, string Username);
 public sealed record EmailCandidate(string Username, string Email);
-public sealed record ProcessingCounters(long InputLines, long ValidInputs, long UsernamesGenerated, long EmailsGenerated, long DuplicateSkipped, long QualityRejected, long RejectedInputs);
+public sealed record ProcessingCounters(long InputLines, long ValidInputs, long UsernamesGenerated, long EmailsGenerated, long DuplicateSkipped, long QualityRejected, long RejectedInputs, int OutputFilesCreated, int? RowsPerOutputFile);
 
 public sealed record ProgressSnapshot(long InputLinesRead, long UsernamesGenerated, long EmailsWritten, long DuplicatesSkipped, long QualityRejected, string Status);
 public sealed record SafetyEstimate(long InputLines, int RulesPerInput, int NumbersPerBase, long EstimatedOutput);

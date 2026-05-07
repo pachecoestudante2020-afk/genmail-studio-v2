@@ -297,3 +297,43 @@ public class PipelineIntegrationTests
         await Assert.ThrowsAsync<ArgumentException>(() => p.RunAsync(path, new GenerationOptions("example.com", Path.GetTempPath()), null, CancellationToken.None));
     }
 }
+
+public class SplitOutputTests
+{
+    [Fact]
+    public async Task SplitFalse_WritesSingleFiles()
+    {
+        string input = Path.Combine(Path.GetTempPath(), $"gm_split_{Guid.NewGuid():N}.txt");
+        await File.WriteAllLinesAsync(input, new[] { "john smith", "jdoe" });
+        GenMailPipeline p = new GenMailPipeline();
+        GenerationOptions o = new GenerationOptions("example.com", Path.Combine(Path.GetTempPath(), "gm_split_out"), SplitOutputFiles: false, SelectedRuleIds: new[] { "firstlast" });
+        ProcessingResult r = await p.RunAsync(input, o, null, CancellationToken.None);
+        Assert.True(File.Exists(Path.Combine(r.OutputDirectory, "emails.txt")));
+        Assert.True(File.Exists(Path.Combine(r.OutputDirectory, "usernames.txt")));
+    }
+
+    [Fact]
+    public async Task SplitTrue_RotatesByRowCount()
+    {
+        string input = Path.Combine(Path.GetTempPath(), $"gm_split_{Guid.NewGuid():N}.txt");
+        await File.WriteAllLinesAsync(input, new[] { "a a", "b b", "c c", "d d", "e e" });
+        GenMailPipeline p = new GenMailPipeline();
+        GenerationOptions o = new GenerationOptions("example.com", Path.Combine(Path.GetTempPath(), "gm_split_out"), SplitOutputFiles: true, RowsPerOutputFile: 2, SelectedRuleIds: new[] { "firstlast" });
+        ProcessingResult r = await p.RunAsync(input, o, null, CancellationToken.None);
+        Assert.Equal(2, File.ReadAllLines(Path.Combine(r.OutputDirectory, "emails_001.txt")).Length);
+        Assert.Equal(2, File.ReadAllLines(Path.Combine(r.OutputDirectory, "emails_002.txt")).Length);
+        Assert.Equal(1, File.ReadAllLines(Path.Combine(r.OutputDirectory, "emails_003.txt")).Length);
+        Assert.False(File.Exists(Path.Combine(r.OutputDirectory, "emails_004.txt")));
+        Assert.Equal(File.ReadAllLines(Path.Combine(r.OutputDirectory, "emails_003.txt")).Length, File.ReadAllLines(Path.Combine(r.OutputDirectory, "usernames_003.txt")).Length);
+    }
+
+    [Fact]
+    public async Task SplitValidation_RejectsInvalidRowsPerFile()
+    {
+        string input = Path.Combine(Path.GetTempPath(), $"gm_split_{Guid.NewGuid():N}.txt");
+        await File.WriteAllLinesAsync(input, new[] { "john smith" });
+        GenMailPipeline p = new GenMailPipeline();
+        await Assert.ThrowsAsync<ArgumentException>(() => p.RunAsync(input, new GenerationOptions("example.com", Path.Combine(Path.GetTempPath(), "gm_split_out"), SplitOutputFiles: true, RowsPerOutputFile: null), null, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => p.RunAsync(input, new GenerationOptions("example.com", Path.Combine(Path.GetTempPath(), "gm_split_out"), SplitOutputFiles: true, RowsPerOutputFile: 0), null, CancellationToken.None));
+    }
+}
