@@ -1,0 +1,44 @@
+<Window x:Class="GenMail.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GenMail Studio" Height="900" Width="1100">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12">
+            <GroupBox Header="Input"><StackPanel Orientation="Horizontal"><TextBox Width="700" Text="{Binding InputPath, UpdateSourceTrigger=PropertyChanged}"/><Button Margin="8,0,0,0" Content="Browse .txt" Command="{Binding BrowseInputFileCommand}"/></StackPanel></GroupBox>
+            <GroupBox Header="Domain" Margin="0,8,0,0"><TextBox Text="{Binding Domain, UpdateSourceTrigger=PropertyChanged}"/></GroupBox>
+
+            <GroupBox Header="Rule preset" Margin="0,8,0,0"><ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"/></GroupBox>
+            <GroupBox Header="Rules" Margin="0,8,0,0">
+                <StackPanel>
+                    <ItemsControl ItemsSource="{Binding RuleItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel>
+                                    <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center"/>
+                                    <TextBlock Margin="6,0,0,0" Text="{Binding Id}" Width="220"/>
+                                    <TextBlock Text="{Binding Example}" Foreground="Gray"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal"><Button Content="Select all" Command="{Binding SelectAllRulesCommand}"/><Button Content="Clear all" Margin="8,0,0,0" Command="{Binding ClearAllRulesCommand}"/><Button Content="Defaults" Margin="8,0,0,0" Command="{Binding DefaultsRulesCommand}"/></StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Number generation" Margin="0,8,0,0"><StackPanel><ComboBox ItemsSource="{Binding NumberModeOptions}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedNumberMode}"/><TextBlock Text="Choose if usernames use no numbers, only numbers, or both." Foreground="Gray"/></StackPanel></GroupBox>
+            <GroupBox Header="Number position" Margin="0,8,0,0"><ComboBox ItemsSource="{Binding NumberPlacementOptions}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedNumberPlacementMode}"/></GroupBox>
+            <GroupBox Header="Number range" Margin="0,8,0,0"><StackPanel><TextBox Text="{Binding NumberRangeText, UpdateSourceTrigger=PropertyChanged}"/><TextBlock Text="Example: 01-03,99" Foreground="Gray"/></StackPanel></GroupBox>
+
+            <GroupBox Header="Duplicate handling" Margin="0,8,0,0"><StackPanel><ComboBox ItemsSource="{Binding DedupeModeOptions}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedDedupeMode}"/><TextBlock Text="Controls how generated duplicates are filtered." Foreground="Gray"/></StackPanel></GroupBox>
+            <GroupBox Header="Input type filter" Margin="0,8,0,0"><StackPanel><ComboBox ItemsSource="{Binding AliasFilterModeOptions}" DisplayMemberPath="Label" SelectedItem="{Binding SelectedAliasFilterMode}"/><TextBlock Text="Filter whether to process names, direct usernames, or both." Foreground="Gray"/></StackPanel></GroupBox>
+
+            <GroupBox Header="Safety limits" Margin="0,8,0,0"><StackPanel><TextBlock Text="Maximum output emails"/><TextBox Text="{Binding MaxOutputEmails}"/><TextBlock Margin="0,4,0,0" Text="Maximum numbers per username"/><TextBox Text="{Binding MaxNumbersPerBase}"/><CheckBox Margin="0,6,0,0" Content="Split output into multiple files" IsChecked="{Binding SplitOutputFiles}"/><TextBox Margin="0,4,0,0" Text="{Binding RowsPerOutputFile}" IsEnabled="{Binding SplitOutputFiles}"/><TextBlock Text="The app will not generate extra data to fill files. The last file may contain fewer rows. For very large runs, split output prevents huge text files. SQLite dedupe can use disk space; InMemory is faster for moderate runs." TextWrapping="Wrap" Foreground="Gray"/></StackPanel></GroupBox>
+
+            <GroupBox Header="Preview (Nguyen Van A)" Margin="0,8,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><ListBox ItemsSource="{Binding PreviewUsernames}"/><ListBox Grid.Column="1" ItemsSource="{Binding PreviewEmails}"/></Grid></GroupBox>
+
+            <GroupBox Header="Progress" Margin="0,8,0,0"><StackPanel><TextBlock Text="{Binding InputLinesRead, StringFormat=Input lines: {0}}"/><TextBlock Text="{Binding UsernamesGenerated, StringFormat=Usernames generated: {0}}"/><TextBlock Text="{Binding EmailsWritten, StringFormat=Emails written: {0}}"/><TextBlock Text="{Binding DuplicatesSkipped, StringFormat=Duplicates skipped: {0}}"/><TextBlock Text="{Binding QualityRejected, StringFormat=Quality rejected: {0}}"/><TextBlock Text="{Binding StatusText, StringFormat=Status: {0}}"/></StackPanel></GroupBox>
+            <GroupBox Header="Output" Margin="0,8,0,0"><StackPanel Orientation="Horizontal"><TextBox Width="700" Text="{Binding OutputFolder}"/><Button Margin="8,0,0,0" Content="Open Folder" Command="{Binding OpenOutputFolderCommand}"/></StackPanel></GroupBox>
+            <GroupBox Header="Actions" Margin="0,8,0,0"><StackPanel Orientation="Horizontal"><Button Content="Estimate" Command="{Binding EstimateCommand}"/><Button Content="Start" Margin="8,0,0,0" Command="{Binding StartCommand}"/><Button Content="Cancel" Margin="8,0,0,0" Command="{Binding CancelCommand}"/></StackPanel></GroupBox>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

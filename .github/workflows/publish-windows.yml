@@ -1,0 +1,38 @@
+name: Publish Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build Release
+        run: dotnet build GenMailStudio.sln -c Release --no-restore
+
+      - name: Test Release
+        run: dotnet test GenMailStudio.sln -c Release --no-build
+
+      - name: Publish WPF app
+        run: dotnet publish src/GenMail.Wpf/GenMail.Wpf.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./artifacts/GenMailStudio-win-x64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GenMailStudio-win-x64
+          path: ./artifacts/GenMailStudio-win-x64
