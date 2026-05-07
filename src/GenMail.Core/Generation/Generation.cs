@@ -59,10 +59,15 @@ public sealed class RuleCatalog
 
     public RuleCatalog(IEnumerable<IUsernameRule> rules)
     {
-        _rules = rules.ToDictionary(x => x.Id, StringComparer.Ordinal);
-        if (_rules.Count != rules.Count())
+        _rules = new Dictionary<string, IUsernameRule>(StringComparer.Ordinal);
+        foreach (IUsernameRule rule in rules)
         {
-            throw new InvalidOperationException("Rule IDs must be unique.");
+            if (_rules.ContainsKey(rule.Id))
+            {
+                throw new InvalidOperationException("Rule IDs must be unique.");
+            }
+
+            _rules.Add(rule.Id, rule);
         }
     }
 
@@ -80,18 +85,18 @@ public static class BuiltInUsernameRules
             new TemplateUsernameRule("last", "{last}"),
             new TemplateUsernameRule("firstlast", "{first}{last}"),
             new TemplateUsernameRule("lastfirst", "{last}{first}"),
-            new TemplateUsernameRule("first.last", "{first}.{last}"),
-            new TemplateUsernameRule("last.first", "{last}.{first}"),
-            new TemplateUsernameRule("first_last", "{first}_{last}"),
-            new TemplateUsernameRule("last_first", "{last}_{first}"),
-            new TemplateUsernameRule("first-last", "{first}-{last}"),
-            new TemplateUsernameRule("last-first", "{last}-{first}"),
+            new TemplateUsernameRule("first.dot.last", "{first}.{last}"),
+            new TemplateUsernameRule("last.dot.first", "{last}.{first}"),
+            new TemplateUsernameRule("first_underscore_last", "{first}_{last}"),
+            new TemplateUsernameRule("last_underscore_first", "{last}_{first}"),
+            new TemplateUsernameRule("first-hyphen-last", "{first}-{last}"),
+            new TemplateUsernameRule("last-hyphen-first", "{last}-{first}"),
             new TemplateUsernameRule("flast", "{fi}{last}"),
             new TemplateUsernameRule("firstl", "{first}{li}"),
-            new TemplateUsernameRule("f.last", "{fi}.{last}"),
-            new TemplateUsernameRule("first.l", "{first}.{li}"),
+            new TemplateUsernameRule("f.dot.last", "{fi}.{last}"),
+            new TemplateUsernameRule("first.dot.l", "{first}.{li}"),
             new TemplateUsernameRule("firstmiddlelast", "{first}{middle}{last}"),
-            new TemplateUsernameRule("first.middle.last", "{first}.{middle}.{last}"),
+            new TemplateUsernameRule("first.dot.middle.dot.last", "{first}.{middle}.{last}"),
             new TemplateUsernameRule("all", "{all}"),
             new TemplateUsernameRule("all.dot", "{first}.{middle}.{last}"),
             new TemplateUsernameRule("reverse.all", "{reverseAll}"),
