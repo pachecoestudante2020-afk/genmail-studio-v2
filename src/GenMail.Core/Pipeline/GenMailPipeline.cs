@@ -79,7 +79,7 @@ public sealed class GenMailPipeline
                     {
                         RejectionReason? reason = quality.Validate(user, options);
                         if (reason.HasValue) { qualityRejects++; qualityRejected.Add($"{record.LineNumber},{user},{reason.Value}"); continue; }
-                        bool added = await dedupeStore.TryAddAsync(new DedupeEntry("global", "username", user), cancellationToken).ConfigureAwait(false);
+                        bool added = await dedupeStore.TryAddAsync(new DedupeEntry("global", "username", user, user, string.Empty, record.OriginalInput, DateTimeOffset.UtcNow), cancellationToken).ConfigureAwait(false);
                         if (!added) { duplicates++; duplicateSkipped.Add($"{record.LineNumber},{user}"); continue; }
                         usernamesGenerated++;
                         await usernamesWriter.WriteLineAsync(user).ConfigureAwait(false);
@@ -97,7 +97,7 @@ public sealed class GenMailPipeline
             {
                 RejectionReason? reason = quality.Validate(user, options);
                 if (reason.HasValue) { qualityRejects++; qualityRejected.Add($"{record.LineNumber},{user},{reason.Value}"); continue; }
-                bool added = await dedupeStore.TryAddAsync(new DedupeEntry("global", "username", user), cancellationToken).ConfigureAwait(false);
+                bool added = await dedupeStore.TryAddAsync(new DedupeEntry("global", "username", user, user, string.Empty, record.OriginalInput, DateTimeOffset.UtcNow), cancellationToken).ConfigureAwait(false);
                 if (!added) { duplicates++; duplicateSkipped.Add($"{record.LineNumber},{user}"); continue; }
                 usernamesGenerated++;
                 await usernamesWriter.WriteLineAsync(user).ConfigureAwait(false);

@@ -37,7 +37,7 @@ public sealed record ProcessingCounters(
 public sealed record ProgressSnapshot(long InputLinesProcessed, long EmailsGenerated, string CurrentInput);
 public sealed record SafetyEstimate(long InputLines, int RulesPerInput, int NumbersPerBase, long EstimatedOutput);
 public sealed record UsernameRuleDefinition(string Id, string Template);
-public sealed record DedupeEntry(string Scope, string KeyMode, string DedupeKey);
+public sealed record DedupeEntry(string Scope, string KeyMode, string Key, string Username, string Email, string SourceInput, DateTimeOffset CreatedAtUtc);
 
 public sealed record ProcessingResult(
     string OutputDirectory,

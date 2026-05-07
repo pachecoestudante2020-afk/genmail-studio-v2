@@ -82,8 +82,8 @@ public class CoreFeatureTests
     public async Task InMemoryDedupe_SkipsDuplicates()
     {
         await using InMemoryDedupeStore s = new InMemoryDedupeStore();
-        Assert.True(await s.TryAddAsync(new DedupeEntry("g", "u", "john"), CancellationToken.None));
-        Assert.False(await s.TryAddAsync(new DedupeEntry("g", "u", "john"), CancellationToken.None));
+        Assert.True(await s.TryAddAsync(new DedupeEntry("g", "u", "john", "john", "john@example.com", "src", DateTimeOffset.UtcNow), CancellationToken.None));
+        Assert.False(await s.TryAddAsync(new DedupeEntry("g", "u", "john", "john", "john@example.com", "src", DateTimeOffset.UtcNow), CancellationToken.None));
     }
 
     [Fact]
@@ -92,11 +92,11 @@ public class CoreFeatureTests
         string path = Path.GetTempFileName();
         await using (SqliteDedupeStore a = new SqliteDedupeStore(path))
         {
-            Assert.True(await a.TryAddAsync(new DedupeEntry("g", "u", "john"), CancellationToken.None));
+            Assert.True(await a.TryAddAsync(new DedupeEntry("g", "u", "john", "john", "john@example.com", "src", DateTimeOffset.UtcNow), CancellationToken.None));
         }
         await using (SqliteDedupeStore b = new SqliteDedupeStore(path))
         {
-            Assert.False(await b.TryAddAsync(new DedupeEntry("g", "u", "john"), CancellationToken.None));
+            Assert.False(await b.TryAddAsync(new DedupeEntry("g", "u", "john", "john", "john@example.com", "src", DateTimeOffset.UtcNow), CancellationToken.None));
         }
     }
 
@@ -246,6 +246,35 @@ public class CoreFeatureTests
         Assert.Throws<ArgumentException>(() => b.Build("john", ""));
         Assert.Throws<ArgumentException>(() => b.Build("john", "exa@mple.com"));
         Assert.Throws<ArgumentException>(() => b.Build("john", "invalid_domain"));
+    }
+
+
+
+    [Fact]
+    public async Task NoopDedupeStore_AcceptsDuplicates()
+    {
+        await using NoopDedupeStore store = new NoopDedupeStore();
+        DedupeEntry entry = new DedupeEntry("scope", "mode", "key", "user", "user@example.com", "src", DateTimeOffset.UtcNow);
+        Assert.True(await store.TryAddAsync(entry, CancellationToken.None));
+        Assert.True(await store.TryAddAsync(entry, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task InMemoryDedupeStore_CaseInsensitiveByDefault()
+    {
+        await using InMemoryDedupeStore store = new InMemoryDedupeStore();
+        Assert.True(await store.TryAddAsync(new DedupeEntry("scope", "mode", "KeyA", "u", "e", "s", DateTimeOffset.UtcNow), CancellationToken.None));
+        Assert.False(await store.TryAddAsync(new DedupeEntry("scope", "mode", "keya", "u", "e", "s", DateTimeOffset.UtcNow), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SqliteDedupeStore_AllowsSameKeyWithDifferentScopeOrMode()
+    {
+        string path = Path.GetTempFileName();
+        await using SqliteDedupeStore store = new SqliteDedupeStore(path);
+        Assert.True(await store.TryAddAsync(new DedupeEntry("scope1", "mode1", "same", "u", "e", "s", DateTimeOffset.UtcNow), CancellationToken.None));
+        Assert.True(await store.TryAddAsync(new DedupeEntry("scope2", "mode1", "same", "u", "e", "s", DateTimeOffset.UtcNow), CancellationToken.None));
+        Assert.True(await store.TryAddAsync(new DedupeEntry("scope1", "mode2", "same", "u", "e", "s", DateTimeOffset.UtcNow), CancellationToken.None));
     }
 
 }
