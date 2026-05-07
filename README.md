@@ -151,3 +151,30 @@ Generation creates an output folder named with timestamp (`yyyyMMdd_HHmmss`) con
 - For large files: reduce rule count/number ranges and use SQLite dedupe for cross-run protection.
 - Many rules multiplied by wide number ranges can expand output dramatically.
 - Use Estimate before Start to avoid unexpectedly large output volume.
+
+
+## GitHub Actions Windows publish
+
+You can produce a Windows x64 self-contained single-file package from GitHub Actions.
+
+### Run manually
+
+1. Open the **Actions** tab in GitHub.
+2. Select **Publish Windows** workflow.
+3. Click **Run workflow**.
+
+The workflow also runs automatically when pushing a tag matching `v*` (for example `v1.0.0`).
+
+### Download artifact
+
+After the workflow completes:
+
+1. Open the workflow run.
+2. Download the artifact named **GenMailStudio-win-x64**.
+3. Extract it and run the published executable on Windows.
+
+### Local publish command
+
+```bash
+dotnet publish src/GenMail.Wpf/GenMail.Wpf.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./artifacts/GenMailStudio-win-x64
+```
