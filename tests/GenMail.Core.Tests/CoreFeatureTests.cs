@@ -66,8 +66,8 @@ public class CoreFeatureTests
     {
         UsernameQualityPolicy q = new UsernameQualityPolicy();
         GenerationOptions o = new GenerationOptions("example.com", "out");
-        Assert.Equal(RejectionReason.RepeatedSeparators, q.Validate("john..smith", o));
-        Assert.Equal(RejectionReason.InvalidCharacters, q.Validate("john@example.com", o));
+        Assert.Equal(RejectionReason.RepeatedSeparator, q.Validate("john..smith", o));
+        Assert.Equal(RejectionReason.LooksLikeEmail, q.Validate("john@example.com", o));
     }
 
     [Fact]
@@ -188,6 +188,64 @@ public class CoreFeatureTests
         IReadOnlyList<string> vals = new NumberExpansionService().Expand("john", new[] { "01" }, NumberMode.BaseAndNumbered, NumberPlacementMode.SuffixOnly);
         Assert.Contains("john", vals);
         Assert.Contains("john01", vals);
+    }
+
+
+
+    [Fact]
+    public void Quality_EmptyUsernameRejected()
+    {
+        UsernameQualityPolicy q = new UsernameQualityPolicy();
+        Assert.Equal(RejectionReason.Empty, q.Validate(string.Empty, new GenerationOptions("example.com", "out")));
+    }
+
+    [Fact]
+    public void Quality_TooShortAndTooLongRejected()
+    {
+        UsernameQualityPolicy q = new UsernameQualityPolicy();
+        GenerationOptions o = new GenerationOptions("example.com", "out", MinUsernameLength: 3, MaxUsernameLength: 5);
+        Assert.Equal(RejectionReason.TooShort, q.Validate("ab", o));
+        Assert.Equal(RejectionReason.TooLong, q.Validate("abcdef", o));
+    }
+
+    [Fact]
+    public void Quality_InvalidRepeatedLeadingTrailingRejected()
+    {
+        UsernameQualityPolicy q = new UsernameQualityPolicy();
+        GenerationOptions o = new GenerationOptions("example.com", "out");
+        Assert.Equal(RejectionReason.InvalidCharacter, q.Validate("john$", o));
+        Assert.Equal(RejectionReason.RepeatedSeparator, q.Validate("john..smith", o));
+        Assert.Equal(RejectionReason.LeadingOrTrailingSeparator, q.Validate(".john", o));
+        Assert.Equal(RejectionReason.LeadingOrTrailingSeparator, q.Validate("john-", o));
+    }
+
+    [Fact]
+    public void Quality_EmailUrlAndDigitsRules()
+    {
+        UsernameQualityPolicy q = new UsernameQualityPolicy();
+        GenerationOptions disabled = new GenerationOptions("example.com", "out", AllowAllDigitsUsernames: false);
+        GenerationOptions enabled = new GenerationOptions("example.com", "out", AllowAllDigitsUsernames: true);
+        Assert.Equal(RejectionReason.LooksLikeEmail, q.Validate("john@example.com", disabled));
+        Assert.Equal(RejectionReason.LooksLikeUrl, q.Validate("http://example.com", disabled));
+        Assert.Equal(RejectionReason.AllDigits, q.Validate("12345", disabled));
+        Assert.Null(q.Validate("12345", enabled));
+        Assert.Null(q.Validate("john.smith_1", disabled));
+    }
+
+    [Fact]
+    public void EmailBuilder_BuildsAndLowercasesDomain()
+    {
+        EmailBuilder b = new EmailBuilder();
+        Assert.Equal("john@example.com", b.Build("john", "Example.COM"));
+    }
+
+    [Fact]
+    public void EmailBuilder_DomainValidationRejectsBadInputs()
+    {
+        EmailBuilder b = new EmailBuilder();
+        Assert.Throws<ArgumentException>(() => b.Build("john", ""));
+        Assert.Throws<ArgumentException>(() => b.Build("john", "exa@mple.com"));
+        Assert.Throws<ArgumentException>(() => b.Build("john", "invalid_domain"));
     }
 
 }
