@@ -316,7 +316,7 @@ public class SplitOutputTests
     public async Task SplitTrue_RotatesByRowCount()
     {
         string input = Path.Combine(Path.GetTempPath(), $"gm_split_{Guid.NewGuid():N}.txt");
-        await File.WriteAllLinesAsync(input, new[] { "a a", "b b", "c c", "d d", "e e" });
+        await File.WriteAllLinesAsync(input, new[] { "john smith", "jane doe", "mike jones", "sara lee", "tom brown" });
         GenMailPipeline p = new GenMailPipeline();
         GenerationOptions o = new GenerationOptions("example.com", Path.Combine(Path.GetTempPath(), "gm_split_out"), SplitOutputFiles: true, RowsPerOutputFile: 2, SelectedRuleIds: new[] { "firstlast" });
         ProcessingResult r = await p.RunAsync(input, o, null, CancellationToken.None);
